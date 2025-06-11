@@ -14,7 +14,7 @@ export function EmissionsSummary() {
       <h2 className="text-xl font-semibold mb-4">Total Emissions Summary</h2>
       <p className="text-green-600 font-medium">Scope 1 Total: {totalScope1.toFixed(2)} Tons CO2e</p>
       <p className="text-green-600 font-medium">Scope 2 Total: {totalScope2.toFixed(2)} Tons CO2e</p>
-      <p className="text-green-700 font-bold text-lg">Grand Total: {total.toFixed(2)} Tons CO2e</p>
+      <p className="text-green-700 font-bold text-lg">Total CO₂e-emissions (Scope 1 and 2): {total.toFixed(2)} Tons CO2e</p>
     </div>
   );
 }

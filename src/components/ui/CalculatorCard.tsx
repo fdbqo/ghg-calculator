@@ -1,72 +1,140 @@
 "use client";
 
+import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
+import { Combobox } from "@/components/ui/combobox";
 import { useEmissions } from "@/context/EmissionsContext";
+
+const fuelFactors = {
+  petrol: 2.31, // kg CO₂e/litre
+  diesel: 2.68,
+};
+
+const unitConversion = {
+  KWh: 1,
+  GJ: 277.78,
+  MWh: 1000,
+};
+
+const electricityFactor = 0.0925; // kg CO₂e per kWh
+
+const heatingFactor = {
+  scope1: 0.05,
+  scope2: 0.04,
+};
 
 type SourceType = "electricity" | "fuel" | "heating";
 
-const EMISSION_FACTORS = {
-  electricity: { scope1: 0, scope2: 0.0000925, unit: "kWh" },
-  fuel: { scope1: 0.00268, scope2: 0, unit: "litres" }, // diesel
-  heating: { scope1: 0, scope2: 0.00017, unit: "kWh" },
-};
-
 export function CalculatorCard({ source }: { source: SourceType }) {
   const { updateEmissions } = useEmissions();
-  const [input, setInput] = useState(0);
+  const [amount, setAmount] = useState("");
+  const [renewable, setRenewable] = useState("");
+  const [unit, setUnit] = useState(source === "fuel" ? "petrol" : "kWh");
+
   const [scope1, setScope1] = useState(0);
   const [scope2, setScope2] = useState(0);
 
   const handleCalculate = () => {
-    const factor = EMISSION_FACTORS[source];
-    const s1 = +(input * factor.scope1).toFixed(2);
-    const s2 = +(input * factor.scope2).toFixed(2);
+    const inputAmount = parseFloat(amount) || 0;
+    const renewableAmount = parseFloat(renewable) || 0;
+
+    let s1 = 0;
+    let s2 = 0;
+
+    const conversion = unitConversion[unit as keyof typeof unitConversion] || 1;
+    const converted = inputAmount * conversion;
+
+    if (source === "fuel") {
+      const factor = fuelFactors[unit as keyof typeof fuelFactors] || 0;
+      s1 = (inputAmount * factor) / 1000;
+    }
+
+    if (source === "electricity") {
+      // Renewable electricity is excluded from emissions
+      const netUsage = inputAmount - renewableAmount;
+      s2 = ((netUsage > 0 ? netUsage : 0) * conversion * electricityFactor) / 1000;
+    }
+
+    if (source === "heating") {
+      s1 = (converted * heatingFactor.scope1) / 1000;
+      s2 = (converted * heatingFactor.scope2) / 1000;
+    }
+
     setScope1(s1);
     setScope2(s2);
+
     updateEmissions(source, { scope1: s1, scope2: s2 });
   };
 
+  const unitOptions =
+    source === "fuel"
+      ? [
+          { label: "Petrol", value: "petrol" },
+          { label: "Diesel", value: "diesel" },
+        ]
+      : [
+          { label: "KWh", value: "kWh" },
+          { label: "GJ", value: "GJ" },
+          { label: "MWh", value: "MWh" },
+        ];
+
   return (
-    <Card className="max-w-md mx-auto">
-      <CardContent className="space-y-4 p-6">
-        <h2 className="text-xl font-bold text-green-700 capitalize text-center">{source} Calculator</h2>
+    <Card className="max-w-xl mx-auto bg-white shadow">
+      <CardContent className="p-6 space-y-5">
+        <h2 className="text-lg font-semibold capitalize text-center text-green-700">
+          {source} Calculator
+        </h2>
 
         <div className="grid grid-cols-2 items-center gap-2">
-          <Label htmlFor="desc">Emission Source:</Label>
-          <Input id="desc" value={source} disabled />
+          <Label>Emission Source:</Label>
+          <Input value={source} disabled />
 
-          <Label htmlFor="input">Amount:</Label>
+          <Label>Amount:</Label>
           <Input
-            id="input"
             type="number"
-            value={input}
-            onChange={(e) => setInput(parseFloat(e.target.value))}
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
           />
 
-          <Label htmlFor="unit">Unit:</Label>
-          <Input id="unit" value={EMISSION_FACTORS[source].unit} disabled />
+          {source === "electricity" && (
+            <>
+              <Label>Electricity consumption from own production</Label>
+              <Input
+                type="number"
+                value={renewable}
+                onChange={(e) => setRenewable(e.target.value)}
+              />
+            </>
+          )}
+
+          <Label>Unit:</Label>
+          <Combobox
+            options={unitOptions}
+            value={unit}
+            onChange={setUnit}
+            placeholder="Select Unit"
+          />
         </div>
 
         <Button className="w-full" onClick={handleCalculate}>
           Calculate
         </Button>
 
-        <div className="grid grid-cols-2 gap-2 pt-4">
-          <Label>Scope 1 CO2e (tons):</Label>
-          <Input className="text-green-600 font-bold" value={scope1.toFixed(2)} disabled />
+        <div className="grid grid-cols-2 gap-2 pt-4 text-green-700">
+          <Label>Scope 1 CO₂e:</Label>
+          <Input value={scope1.toFixed(2)} disabled className="font-bold" />
 
-          <Label>Scope 2 CO2e (tons):</Label>
-          <Input className="text-green-600 font-bold" value={scope2.toFixed(2)} disabled />
+          <Label>Scope 2 CO₂e:</Label>
+          <Input value={scope2.toFixed(2)} disabled className="font-bold" />
 
-          <Label>Total Emissions (tons):</Label>
+          <Label>Total CO₂e (tons):</Label>
           <Input
-            className="text-green-600 font-bold"
             value={(scope1 + scope2).toFixed(2)}
             disabled
+            className="font-bold"
           />
         </div>
       </CardContent>
