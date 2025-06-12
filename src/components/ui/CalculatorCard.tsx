@@ -14,7 +14,7 @@ const fuelFactors = {
 };
 
 const unitConversion = {
-  KWh: 1,
+  kWh: 1,
   GJ: 277.78,
   MWh: 1000,
 };
@@ -47,26 +47,43 @@ export function CalculatorCard({ source }: { source: SourceType }) {
     const conversion = unitConversion[unit as keyof typeof unitConversion] || 1;
     const converted = inputAmount * conversion;
 
+    let renewableEnergy = 0;
+    let nonRenewableEnergy = 0;
+    let totalEnergy = converted;
+
     if (source === "fuel") {
       const factor = fuelFactors[unit as keyof typeof fuelFactors] || 0;
       s1 = (inputAmount * factor) / 1000;
+      renewableEnergy = 0;
+      nonRenewableEnergy = totalEnergy;
     }
 
     if (source === "electricity") {
-      // Renewable electricity is excluded from emissions
       const netUsage = inputAmount - renewableAmount;
       s2 = ((netUsage > 0 ? netUsage : 0) * conversion * electricityFactor) / 1000;
+
+      renewableEnergy = renewableAmount * conversion;
+      nonRenewableEnergy = netUsage > 0 ? netUsage * conversion : 0;
+      totalEnergy = renewableEnergy + nonRenewableEnergy;
     }
 
     if (source === "heating") {
       s1 = (converted * heatingFactor.scope1) / 1000;
       s2 = (converted * heatingFactor.scope2) / 1000;
+      renewableEnergy = 0;
+      nonRenewableEnergy = totalEnergy;
     }
 
     setScope1(s1);
     setScope2(s2);
 
-    updateEmissions(source, { scope1: s1, scope2: s2 });
+    updateEmissions(source, {
+      scope1: s1,
+      scope2: s2,
+      renewableEnergy,
+      nonRenewableEnergy,
+      totalEnergy,
+    });
   };
 
   const unitOptions =
@@ -76,7 +93,7 @@ export function CalculatorCard({ source }: { source: SourceType }) {
           { label: "Diesel", value: "diesel" },
         ]
       : [
-          { label: "KWh", value: "kWh" },
+          { label: "kWh", value: "kWh" },
           { label: "GJ", value: "GJ" },
           { label: "MWh", value: "MWh" },
         ];
@@ -101,7 +118,7 @@ export function CalculatorCard({ source }: { source: SourceType }) {
 
           {source === "electricity" && (
             <>
-              <Label>Electricity consumption from own production</Label>
+              <Label>Consumption from Own Production (Renewable):</Label>
               <Input
                 type="number"
                 value={renewable}
