@@ -3,22 +3,21 @@
 import { useEmissions } from "@/context/EmissionsContext";
 
 export function EmissionsSummary() {
-  const { electricity, fuel, heating } = useEmissions();
+  const { emissions } = useEmissions();
 
-  const totalScope1 = electricity.scope1 + fuel.scope1 + heating.scope1;
-  const totalScope2 = electricity.scope2 + fuel.scope2 + heating.scope2;
+  const sources = ["electricity", "fuel", "heating", "process", "vehicles"] as const;
+
+  const rows = sources.map((source) => ({
+    label: source === "process" ? "Gas" : source.charAt(0).toUpperCase() + source.slice(1),
+    ...emissions[source],
+  }));
+
+  const totalScope1 = rows.reduce((sum, row) => sum + row.scope1, 0);
+  const totalScope2 = rows.reduce((sum, row) => sum + row.scope2, 0);
   const totalEmissions = totalScope1 + totalScope2;
 
-  const totalRenewableEnergy =
-    electricity.renewableEnergy +
-    fuel.renewableEnergy +
-    heating.renewableEnergy;
-
-  const totalNonRenewableEnergy =
-    electricity.nonRenewableEnergy +
-    fuel.nonRenewableEnergy +
-    heating.nonRenewableEnergy;
-
+  const totalRenewableEnergy = rows.reduce((sum, row) => sum + row.renewableEnergy, 0);
+  const totalNonRenewableEnergy = rows.reduce((sum, row) => sum + row.nonRenewableEnergy, 0);
   const totalEnergy = totalRenewableEnergy + totalNonRenewableEnergy;
 
   return (
@@ -41,39 +40,19 @@ export function EmissionsSummary() {
             </tr>
           </thead>
           <tbody className="text-green-700">
-            <tr>
-              <td className="p-2 border font-medium">Electricity</td>
-              <td className="p-2 border">{electricity.renewableEnergy.toFixed(2)}</td>
-              <td className="p-2 border">{electricity.nonRenewableEnergy.toFixed(2)}</td>
-              <td className="p-2 border">{electricity.totalEnergy.toFixed(2)}</td>
-              <td className="p-2 border">{electricity.scope1.toFixed(2)}</td>
-              <td className="p-2 border">{electricity.scope2.toFixed(2)}</td>
-              <td className="p-2 border">
-                {(electricity.scope1 + electricity.scope2).toFixed(2)}
-              </td>
-            </tr>
-            <tr>
-              <td className="p-2 border font-medium">Fuel</td>
-              <td className="p-2 border">{fuel.renewableEnergy.toFixed(2)}</td>
-              <td className="p-2 border">{fuel.nonRenewableEnergy.toFixed(2)}</td>
-              <td className="p-2 border">{fuel.totalEnergy.toFixed(2)}</td>
-              <td className="p-2 border">{fuel.scope1.toFixed(2)}</td>
-              <td className="p-2 border">{fuel.scope2.toFixed(2)}</td>
-              <td className="p-2 border">
-                {(fuel.scope1 + fuel.scope2).toFixed(2)}
-              </td>
-            </tr>
-            <tr>
-              <td className="p-2 border font-medium">Heating</td>
-              <td className="p-2 border">{heating.renewableEnergy.toFixed(2)}</td>
-              <td className="p-2 border">{heating.nonRenewableEnergy.toFixed(2)}</td>
-              <td className="p-2 border">{heating.totalEnergy.toFixed(2)}</td>
-              <td className="p-2 border">{heating.scope1.toFixed(2)}</td>
-              <td className="p-2 border">{heating.scope2.toFixed(2)}</td>
-              <td className="p-2 border">
-                {(heating.scope1 + heating.scope2).toFixed(2)}
-              </td>
-            </tr>
+            {rows.map((row) => (
+              <tr key={row.label}>
+                <td className="p-2 border font-medium">{row.label}</td>
+                <td className="p-2 border">{row.renewableEnergy.toFixed(2)}</td>
+                <td className="p-2 border">{row.nonRenewableEnergy.toFixed(2)}</td>
+                <td className="p-2 border">{row.totalEnergy.toFixed(2)}</td>
+                <td className="p-2 border">{row.scope1.toFixed(2)}</td>
+                <td className="p-2 border">{row.scope2.toFixed(2)}</td>
+                <td className="p-2 border">
+                  {(row.scope1 + row.scope2).toFixed(2)}
+                </td>
+              </tr>
+            ))}
             <tr className="bg-green-50 font-semibold text-green-950">
               <td className="p-2 border">Total</td>
               <td className="p-2 border">{totalRenewableEnergy.toFixed(2)}</td>
