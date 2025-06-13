@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
-import { InputSchema, UnitMap } from '@/lib/other/zod'
+import { InputSchema } from '@/lib/other/zod'
+import { buildPayload } from '@/lib/api/payloadBuilder'
 
 export async function POST(request: Request) {
   let input
@@ -12,29 +13,26 @@ export async function POST(request: Request) {
     )
   }
 
-  const payload = {
-    id: -1,
-    calculationId: -1,
-    subgroupingId: 1,
-    coeficientGroup: 'Miljødeklaration',
-    fieldValues: [
-      { id: 1,  value: input.description },
-      { id: 2,  value: input.consumptionGrid },
-      { id: 3,  value: input.consumptionOwn },
-      { id: 1154, value: '' },
-      {
-        id: 4,
-        value: UnitMap[input.unit].code,
-        fieldEnumId: UnitMap[input.unit].fieldEnumId,
-      },
-      { id: 5,  value: '' },
-      { id: 6,  value: '' },
-      { id: 40, value: '' },
-      { id: 8,  value: '' },
-      { id: 9,  value: '' },
-      { id: 68, value: 'fe_id-700', fieldEnumId: 700 },
-    ],
-    isBasisModule: true,
+  let payload
+  try {
+    payload = buildPayload({
+      type: input.type,
+      description: input.description,
+      consumptionGrid: input.consumptionGrid,
+      consumptionOwn: input.consumptionOwn,
+      unitId: input.unitId,
+      unitEnumId: input.unitEnumId,
+      amount: input.amount,
+      emissionFactor: input.emissionFactor,
+      fuelTypeId: input.fuelTypeId,
+      fuelTypeEnumId: input.fuelTypeEnumId,
+      biogasProportion: input.biogasProportion,
+    })
+  } catch (err: any) {
+    return NextResponse.json(
+      { error: err.message || 'Invalid calculator type or payload' },
+      { status: 400 }
+    )
   }
 
   let resExternal: Response
@@ -53,7 +51,10 @@ export async function POST(request: Request) {
       }
     )
   } catch (err: any) {
-    return NextResponse.json({ error: `Network error: ${err.message}` }, { status: 500 })
+    return NextResponse.json(
+      { error: `Network error: ${err.message}` },
+      { status: 500 }
+    )
   }
 
   if (!resExternal.ok) {
@@ -65,5 +66,5 @@ export async function POST(request: Request) {
   }
 
   const data = await resExternal.json()
-  return NextResponse.json(data)
+  return NextResponse.json({ data })
 }
