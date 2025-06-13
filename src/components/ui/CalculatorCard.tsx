@@ -1,157 +1,244 @@
 "use client";
 
-import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Combobox } from "@/components/ui/combobox";
+import { useState } from "react";
 import { useEmissions } from "@/context/EmissionsContext";
-
-const fuelFactors = {
-  petrol: 2.31, // kg CO₂e/litre
-  diesel: 2.68,
-};
-
-const unitConversion = {
-  kWh: 1,
-  GJ: 277.78,
-  MWh: 1000,
-};
-
-const electricityFactor = 0.0925; // kg CO₂e per kWh
-
-const heatingFactor = {
-  scope1: 0.05,
-  scope2: 0.04,
-};
+import { UnitMap } from "@/lib/other/zod";
 
 type SourceType = "electricity" | "fuel" | "heating";
 
+// api expected enums
+const FUEL_TYPES = [
+  { label: "Diesel", value: "Diesel", enumId: 625 },
+  { label: "Biogas", value: "Biogas", enumId: 40 },
+  { label: "Natural gas (X% biogas)", value: "NaturalGasBiogas", enumId: 41 },
+];
+
+// Map of unit options for each source type
+const UNIT_OPTIONS_MAP: Record<SourceType, { label: string; value: string }[]> = {
+  electricity: [
+    { label: "KWh", value: "KWh" },
+    { label: "MWh", value: "MWh" },
+    { label: "GJ", value: "GJ" },
+  ],
+  heating: [
+    { label: "KWh", value: "KWh" },
+    { label: "MWh", value: "MWh" },
+    { label: "GJ", value: "GJ" },
+  ],
+  fuel: [
+    { label: "L", value: "L" },
+    { label: "m3", value: "m3" },
+    { label: "nm3", value: "nm3" },
+  ],
+};
+
+// only show "L" for Diesel, "m3" etc for gases
+const FUEL_UNIT_OPTIONS: Record<string, { label: string; value: string }[]> = {
+  Diesel: [
+    { label: "L", value: "L" }
+  ],
+  Biogas: [
+    { label: "m3", value: "m3" },
+    { label: "nm3", value: "nm3" }
+  ],
+  NaturalGasBiogas: [
+    { label: "m3", value: "m3" },
+    { label: "nm3", value: "nm3" }
+  ]
+};
+
 export function CalculatorCard({ source }: { source: SourceType }) {
   const { updateEmissions } = useEmissions();
-  const [amount, setAmount] = useState("");
-  const [renewable, setRenewable] = useState("");
-  const [unit, setUnit] = useState(source === "fuel" ? "petrol" : "kWh");
-
+  const [input, setInput] = useState(0); 
+  const [input2, setInput2] = useState(0); 
+  const [unit, setUnit] = useState(source === "fuel" ? "L" : "KWh");
+  const [fuelType, setFuelType] = useState(FUEL_TYPES[0].value);
+  const [fuelTypeEnumId, setFuelTypeEnumId] = useState(FUEL_TYPES[0].enumId);
   const [scope1, setScope1] = useState(0);
   const [scope2, setScope2] = useState(0);
 
-  const handleCalculate = () => {
-    const inputAmount = parseFloat(amount) || 0;
-    const renewableAmount = parseFloat(renewable) || 0;
-
-    let s1 = 0;
-    let s2 = 0;
-
-    const conversion = unitConversion[unit as keyof typeof unitConversion] || 1;
-    const converted = inputAmount * conversion;
-
-    let renewableEnergy = 0;
-    let nonRenewableEnergy = 0;
-    let totalEnergy = converted;
-
-    if (source === "fuel") {
-      const factor = fuelFactors[unit as keyof typeof fuelFactors] || 0;
-      s1 = (inputAmount * factor) / 1000;
-      renewableEnergy = 0;
-      nonRenewableEnergy = totalEnergy;
-    }
+  const handleCalculate = async () => {
+    let payload: any = {};
 
     if (source === "electricity") {
-      const netUsage = inputAmount - renewableAmount;
-      s2 = ((netUsage > 0 ? netUsage : 0) * conversion * electricityFactor) / 1000;
-
-      renewableEnergy = renewableAmount * conversion;
-      nonRenewableEnergy = netUsage > 0 ? netUsage * conversion : 0;
-      totalEnergy = renewableEnergy + nonRenewableEnergy;
+      const unitInfo = UnitMap[unit as keyof typeof UnitMap];
+      payload = {
+        type: "electricity",
+        description: "electricity",
+        consumptionGrid: input.toString(),
+        consumptionOwn: input2.toString(),
+        unit,
+        unitId: unitInfo.code,
+        unitEnumId: unitInfo.fieldEnumId,
+      };
+    } else if (source === "heating") {
+      const unitInfo = UnitMap[unit as keyof typeof UnitMap];
+      payload = {
+        type: "heat",
+        description: "heating",
+        amount: input.toString(),
+        unit,
+        unitId: unitInfo.code,
+        unitEnumId: unitInfo.fieldEnumId,
+        emissionFactor: input2 ? input2.toString() : undefined,
+      };
+    } else if (source === "fuel") {
+      const unitInfo = UnitMap[unit as keyof typeof UnitMap];
+      payload = {
+        type: "fuels",
+        description: "fuels",
+        amount: input.toString(),
+        unit,
+        unitId: unitInfo.code,
+        unitEnumId: unitInfo.fieldEnumId,
+        fuelTypeId: fuelType,
+        fuelTypeEnumId: fuelTypeEnumId,
+        biogasProportion: input2 ? input2.toString() : "",
+      };
     }
 
-    if (source === "heating") {
-      s1 = (converted * heatingFactor.scope1) / 1000;
-      s2 = (converted * heatingFactor.scope2) / 1000;
-      renewableEnergy = 0;
-      nonRenewableEnergy = totalEnergy;
-    }
-
-    setScope1(s1);
-    setScope2(s2);
-
-    updateEmissions(source, {
-      scope1: s1,
-      scope2: s2,
-      renewableEnergy,
-      nonRenewableEnergy,
-      totalEnergy,
+    const res = await fetch('/api/calculate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
     });
+    const result = await res.json();
+
+    const fv = result.data?.fieldValues ?? [];
+    const value5 = fv.find((f: any) => f.id === 5)?.value ?? "0";
+    const value6 = fv.find((f: any) => f.id === 6)?.value ?? "0";
+    setScope1(Number(value5));
+    setScope2(Number(value6));
+    updateEmissions(source, { scope1: Number(value5), scope2: Number(value6) });
   };
 
-  const unitOptions =
-    source === "fuel"
-      ? [
-          { label: "Petrol", value: "petrol" },
-          { label: "Diesel", value: "diesel" },
-        ]
-      : [
-          { label: "kWh", value: "kWh" },
-          { label: "GJ", value: "GJ" },
-          { label: "MWh", value: "MWh" },
-        ];
+  const unitOptions = UNIT_OPTIONS_MAP[source];
+  const fuelUnitOptions = source === "fuel"
+    ? FUEL_UNIT_OPTIONS[fuelType] || []
+    : UNIT_OPTIONS_MAP[source];
 
   return (
-    <Card className="max-w-xl mx-auto bg-white shadow">
-      <CardContent className="p-6 space-y-5">
-        <h2 className="text-lg font-semibold capitalize text-center text-green-700">
-          {source} Calculator
-        </h2>
-
+    <Card className="max-w-md mx-auto">
+      <CardContent className="space-y-4 p-6">
+        <h2 className="text-xl font-bold text-green-700 capitalize text-center">{source} Calculator</h2>
         <div className="grid grid-cols-2 items-center gap-2">
-          <Label>Emission Source:</Label>
-          <Input value={source} disabled />
-
-          <Label>Amount:</Label>
-          <Input
-            type="number"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-          />
+          <Label htmlFor="desc">Description:</Label>
+          <Input id="desc" value={source} disabled />
 
           {source === "electricity" && (
             <>
-              <Label>Consumption from Own Production (Renewable):</Label>
+              <Label htmlFor="input">Consumption from grid:</Label>
               <Input
+                id="input"
                 type="number"
-                value={renewable}
-                onChange={(e) => setRenewable(e.target.value)}
+                value={input}
+                min={0}
+                onChange={e => setInput(Number(e.target.value))}
+              />
+              <Label htmlFor="input2">Own production:</Label>
+              <Input
+                id="input2"
+                type="number"
+                value={input2}
+                min={0}
+                onChange={e => setInput2(Number(e.target.value))}
               />
             </>
           )}
 
-          <Label>Unit:</Label>
-          <Combobox
-            options={unitOptions}
+          {source === "heating" && (
+            <>
+              <Label htmlFor="input">Amount:</Label>
+              <Input
+                id="input"
+                type="number"
+                value={input}
+                min={0}
+                onChange={e => setInput(Number(e.target.value))}
+              />
+              <Label htmlFor="input2">Em.fctr., kgCO₂e/unit (optional):</Label>
+              <Input
+                id="input2"
+                type="number"
+                value={input2}
+                min={0}
+                onChange={e => setInput2(Number(e.target.value))}
+              />
+            </>
+          )}
+
+          {source === "fuel" && (
+            <>
+              <Label htmlFor="input">Amount:</Label>
+              <Input
+                id="input"
+                type="number"
+                value={input}
+                min={0}
+                onChange={e => setInput(Number(e.target.value))}
+              />
+              <Label htmlFor="fuelType">Fuel type:</Label>
+              <select
+                id="fuelType"
+                value={fuelType}
+                onChange={e => {
+                  const idx = FUEL_TYPES.findIndex(f => f.value === e.target.value);
+                  setFuelType(e.target.value);
+                  setFuelTypeEnumId(FUEL_TYPES[idx]?.enumId ?? 0);
+                  // reset unit to first valid option for new fuel type
+                  const newUnit = FUEL_UNIT_OPTIONS[e.target.value]?.[0]?.value || "";
+                  setUnit(newUnit);
+                }}
+                className="border rounded px-2 py-1"
+              >
+                {FUEL_TYPES.map(f => (
+                  <option key={f.value + f.label} value={f.value}>{f.label}</option>
+                ))}
+              </select>
+              <Label htmlFor="input2">Proportion of biogas (%) (optional):</Label>
+              <Input
+                id="input2"
+                type="number"
+                value={input2}
+                min={0}
+                onChange={e => setInput2(Number(e.target.value))}
+              />
+            </>
+          )}
+
+          <Label htmlFor="unit">Unit:</Label>
+          <select
+            id="unit"
             value={unit}
-            onChange={setUnit}
-            placeholder="Select Unit"
-          />
+            onChange={e => setUnit(e.target.value)}
+            className="border rounded px-2 py-1"
+          >
+            {fuelUnitOptions.map(u => (
+              <option key={u.value} value={u.value}>{u.label}</option>
+            ))}
+          </select>
         </div>
 
         <Button className="w-full" onClick={handleCalculate}>
           Calculate
         </Button>
 
-        <div className="grid grid-cols-2 gap-2 pt-4 text-green-700">
-          <Label>Scope 1 CO₂e:</Label>
-          <Input value={scope1.toFixed(2)} disabled className="font-bold" />
+        <div className="grid grid-cols-2 gap-2 pt-4">
+          <Label>Scope 1 CO2e (tons):</Label>
+          <Input className="text-green-600 font-bold" value={scope1.toFixed(2)} disabled />
 
-          <Label>Scope 2 CO₂e:</Label>
-          <Input value={scope2.toFixed(2)} disabled className="font-bold" />
+          <Label>Scope 2 CO2e (tons):</Label>
+          <Input className="text-green-600 font-bold" value={scope2.toFixed(2)} disabled />
 
-          <Label>Total CO₂e (tons):</Label>
+          <Label>Total Emissions (tons):</Label>
           <Input
+            className="text-green-600 font-bold"
             value={(scope1 + scope2).toFixed(2)}
             disabled
-            className="font-bold"
           />
         </div>
       </CardContent>
