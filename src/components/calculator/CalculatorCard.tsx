@@ -119,7 +119,12 @@ export function CalculatorCard({ source }: { source: SourceType }) {
     const value6 = fv.find((f: any) => f.id === 6)?.value ?? "0";
     setScope1(Number(value5));
     setScope2(Number(value6));
-    updateEmissions(source, { scope1: Number(value5), scope2: Number(value6) });
+    updateEmissions(source, {
+      scope1: Number(value5), scope2: Number(value6),
+      renewableEnergy: 0,
+      nonRenewableEnergy: 0,
+      totalEnergy: 0
+    });
   };
 
   const availableUnitOptions = source === "fuel"
