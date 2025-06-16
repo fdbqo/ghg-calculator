@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server'
-import { InputSchema } from '@/lib/other/zod'
+import { inputSchema } from '@/lib/other/zod'
 import { buildPayload } from '@/lib/api/payloadBuilder'
 
 export async function POST(request: Request) {
   let input
   try {
-    input = InputSchema.parse(await request.json())
+    input = inputSchema.parse(await request.json())
   } catch (err: any) {
     return NextResponse.json(
       { error: err.errors.map((e: any) => e.message).join('; ') },

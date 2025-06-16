@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const InputSchema = z.object({
+export const inputSchema = z.object({
   type:             z.enum(['electricity', 'heat', 'fuels']),
   description:      z.string().min(1, 'Description is required'),
   consumptionGrid:  z.string().regex(/^\d+(\.\d+)?$/, 'Must be a number').optional(),
@@ -15,8 +15,8 @@ export const InputSchema = z.object({
   unitEnumId:       z.number().optional(),
 })
 
-export const UnitMap: Record<
-  NonNullable<z.infer<typeof InputSchema>['unit']>,
+export const unitMap: Record<
+  NonNullable<z.infer<typeof inputSchema>['unit']>,
   { code: string; fieldEnumId: number }
 > = {
   KWh: { code: 'fe_id-1', fieldEnumId: 1 },
