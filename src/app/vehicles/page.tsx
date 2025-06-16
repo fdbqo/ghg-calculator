@@ -1,6 +1,6 @@
-import { CalculatorCard } from "@/components/ui/CalculatorCard";
+import { CalculatorCard } from "@/app/CalculatorCard";
 import { EmissionsSummary } from "@/components/EmissionsSummary";
-import { Navbar } from "@/components/ui/Navbar";
+import { Navbar } from "@/components/Navbar";
 
 export default function VehiclesPage() {
   return (
