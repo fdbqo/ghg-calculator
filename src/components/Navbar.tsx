@@ -7,14 +7,21 @@ export function Navbar() {
     <nav className="bg-white shadow-md py-4 mb-6">
       <div className="container mx-auto flex justify-center space-x-8">
         <Link href="/" className="text-lg font-medium text-gray hover:text-green-600 transition">
-          Electricity⚡
+          Electricity ⚡
         </Link>
         <Link href="/fuel" className="text-lg font-medium text-gray hover:text-green-600 transition">
-          Fuel⛽
+          Fuel ⛽
         </Link>
         <Link href="/heating" className="text-lg font-medium text-gray hover:text-green-600 transition">
-          Heating🔥
+          Heating 🔥
         </Link>
+        <Link href="/process" className="text-lg font-medium text-gray hover:text-green-600 transition">
+          GH Gases ☀️ 
+        </Link>
+        <Link href="/vehicles" className="text-lg font-medium text-gray hover:text-green-600 transition">
+        Vehicles 🚗
+        </Link>
+      
       </div>
     </nav>
   );

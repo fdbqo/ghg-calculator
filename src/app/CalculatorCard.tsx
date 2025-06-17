@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Combobox } from "@/components/ui/combobox";
 import { useEmissions } from "@/context/EmissionsContext";
+import type { SourceType } from "@/context/EmissionsContext";
 
 const fuelFactors = {
   petrol: 2.31, // kg CO₂e/litre
@@ -26,13 +27,22 @@ const heatingFactor = {
   scope2: 0.04,
 };
 
-type SourceType = "electricity" | "fuel" | "heating";
+// Mapping source keys to labels
+const sourceLabels: Record<SourceType, string> = {
+  electricity: "Electricity",
+  fuel: "Fuel",
+  heating: "Heating",
+  process: "Gas",
+  vehicles: "Vehicles",
+};
 
 export function CalculatorCard({ source }: { source: SourceType }) {
   const { updateEmissions } = useEmissions();
   const [amount, setAmount] = useState("");
   const [renewable, setRenewable] = useState("");
-  const [unit, setUnit] = useState(source === "fuel" ? "petrol" : "kWh");
+  const [unit, setUnit] = useState(
+    source === "fuel" || source === "vehicles" ? "petrol" : "kWh"
+  );
 
   const [scope1, setScope1] = useState(0);
   const [scope2, setScope2] = useState(0);
@@ -51,7 +61,7 @@ export function CalculatorCard({ source }: { source: SourceType }) {
     let nonRenewableEnergy = 0;
     let totalEnergy = converted;
 
-    if (source === "fuel") {
+    if (source === "fuel" || source === "vehicles") {
       const factor = fuelFactors[unit as keyof typeof fuelFactors] || 0;
       s1 = (inputAmount * factor) / 1000;
       renewableEnergy = 0;
@@ -67,7 +77,7 @@ export function CalculatorCard({ source }: { source: SourceType }) {
       totalEnergy = renewableEnergy + nonRenewableEnergy;
     }
 
-    if (source === "heating") {
+    if (source === "heating" || source === "process") {
       s1 = (converted * heatingFactor.scope1) / 1000;
       s2 = (converted * heatingFactor.scope2) / 1000;
       renewableEnergy = 0;
@@ -87,7 +97,7 @@ export function CalculatorCard({ source }: { source: SourceType }) {
   };
 
   const unitOptions =
-    source === "fuel"
+    source === "fuel" || source === "vehicles"
       ? [
           { label: "Petrol", value: "petrol" },
           { label: "Diesel", value: "diesel" },
@@ -102,14 +112,17 @@ export function CalculatorCard({ source }: { source: SourceType }) {
     <Card className="max-w-xl mx-auto bg-white shadow">
       <CardContent className="p-6 space-y-5">
         <h2 className="text-lg font-semibold capitalize text-center text-green-700">
-          {source} Calculator
+          {sourceLabels[source]} Calculator
         </h2>
 
         <div className="grid grid-cols-2 items-center gap-2">
           <Label>Emission Source:</Label>
-          <Input value={source} disabled />
+          <Input value={sourceLabels[source]} disabled />
 
-          <Label>Amount:</Label>
+          <Label>
+            Amount
+            {(source === "fuel" || source === "vehicles") && " (litres)"}
+          </Label>
           <Input
             type="number"
             value={amount}
