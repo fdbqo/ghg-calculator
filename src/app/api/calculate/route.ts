@@ -18,15 +18,25 @@ export async function POST(request: Request) {
     payload = buildPayload({
       type: input.type,
       description: input.description,
-      consumptionGrid: input.consumptionGrid,
-      consumptionOwn: input.consumptionOwn,
+      // common fields
+      amount: input.amount,
       unitId: input.unitId,
       unitEnumId: input.unitEnumId,
-      amount: input.amount,
+      // electricity fields
+      consumptionGrid: input.consumptionGrid,
+      consumptionOwn: input.consumptionOwn,
+      // heat fields
       emissionFactor: input.emissionFactor,
+      // fuels fields
       fuelTypeId: input.fuelTypeId,
       fuelTypeEnumId: input.fuelTypeEnumId,
       biogasProportion: input.biogasProportion,
+      // vehicle fields
+      vehicleTypeId: input.vehicleTypeId,
+      vehicleTypeEnumId: input.vehicleTypeEnumId,
+      // process fields
+      processTypeId: input.processTypeId,
+      processTypeEnumId: input.processTypeEnumId,
     })
   } catch (err: any) {
     return NextResponse.json(
@@ -65,6 +75,15 @@ export async function POST(request: Request) {
     )
   }
 
-  const data = await resExternal.json()
-  return NextResponse.json({ data })
+  try {
+    const data = await resExternal.json()
+    return NextResponse.json({ data })
+  } catch (err) {
+    // Handle JSON parse errors
+    const text = await resExternal.text().catch(() => '')
+    return NextResponse.json(
+      { error: 'Invalid response from external API', details: text },
+      { status: 502 }
+    )
+  }
 }
