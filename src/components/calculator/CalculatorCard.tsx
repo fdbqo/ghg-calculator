@@ -27,10 +27,10 @@ const fuelTypes = [
 
 // greenhouse gas types
 const gasTypes = [
-  { label: "CO₂", value: "fe_id-60", enumId: 60 },
-  { label: "CH₄", value: "fe_id-61", enumId: 61 },
-  { label: "N₂O", value: "fe_id-62", enumId: 62 },
-  { label: "SF₆", value: "fe_id-65", enumId: 65 },
+  { label: "CO₂", value: "fe_id-43", enumId: 43 },
+  { label: "CH₄", value: "fe_id-44", enumId: 44 },
+  { label: "N₂O", value: "fe_id-45", enumId: 45 },
+  { label: "SF₆", value: "fe_id-46", enumId: 46 },
 ];
 
 // map of unit options for each source type
@@ -56,7 +56,6 @@ const unitOptionsMap: Record<SourceType, { label: string; value: string }[]> = {
   ],
   process: [
     { label: "Kg", value: "Kg" },
-    { label: "t", value: "t" },
   ],
 };
 

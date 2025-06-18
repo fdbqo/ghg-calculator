@@ -79,7 +79,6 @@ export async function POST(request: Request) {
     const data = await resExternal.json()
     return NextResponse.json({ data })
   } catch (err) {
-    // Handle JSON parse errors
     const text = await resExternal.text().catch(() => '')
     return NextResponse.json(
       { error: 'Invalid response from external API', details: text },
