@@ -6,15 +6,31 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { useEmissions } from "@/context/EmissionsContext";
-import { unitMap } from "@/lib/other/zod";
+import { unitMap, vehicleTypes } from "@/lib/other/zod";
+import type { SourceType } from "@/context/EmissionsContext";
 
-type SourceType = "electricity" | "fuel" | "heating";
+// mapping source keys to labels
+const sourceLabels: Record<SourceType, string> = {
+  electricity: "Electricity",
+  fuel: "Fuel",
+  heating: "Heating",
+  process: "Greenhouse Gas",
+  vehicles: "Vehicles",
+};
 
 // api expected enums
 const fuelTypes = [
   { label: "Diesel", value: "Diesel", enumId: 625 },
   { label: "Biogas", value: "Biogas", enumId: 40 },
   { label: "Natural gas (X% biogas)", value: "NaturalGasBiogas", enumId: 41 },
+];
+
+// greenhouse gas types
+const gasTypes = [
+  { label: "CO₂", value: "fe_id-43", enumId: 43 },
+  { label: "CH₄", value: "fe_id-44", enumId: 44 },
+  { label: "N₂O", value: "fe_id-45", enumId: 45 },
+  { label: "SF₆", value: "fe_id-46", enumId: 46 },
 ];
 
 // map of unit options for each source type
@@ -34,9 +50,15 @@ const unitOptionsMap: Record<SourceType, { label: string; value: string }[]> = {
     { label: "m3", value: "m3" },
     { label: "nm3", value: "nm3" },
   ],
+  vehicles: [
+    { label: "L", value: "L" },
+    { label: "km", value: "km" },
+  ],
+  process: [
+    { label: "Kg", value: "Kg" },
+  ],
 };
 
-// only show "L" for diesel, "m3" etc for gases
 const fuelUnitOptions: Record<string, { label: string; value: string }[]> = {
   Diesel: [
     { label: "L", value: "L" }
@@ -53,16 +75,24 @@ const fuelUnitOptions: Record<string, { label: string; value: string }[]> = {
 
 export function CalculatorCard({ source }: { source: SourceType }) {
   const { updateEmissions } = useEmissions();
-  const [input, setInput] = useState(0); 
-  const [input2, setInput2] = useState(0); 
-  const [unit, setUnit] = useState(source === "fuel" ? "L" : "KWh");
+  const [input, setInput] = useState(0);
+  const [input2, setInput2] = useState(0);
+  const [unit, setUnit] = useState(source === "process" ? "Kg" : 
+                               source === "fuel" || source === "vehicles" ? "L" : "KWh");
   const [fuelType, setFuelType] = useState(fuelTypes[0].value);
   const [fuelTypeEnumId, setFuelTypeEnumId] = useState(fuelTypes[0].enumId);
+  const [vehicleType, setVehicleType] = useState(vehicleTypes[0].value);
+  const [vehicleTypeEnumId, setVehicleTypeEnumId] = useState(vehicleTypes[0].enumId);
+  const [gasType, setGasType] = useState(gasTypes[0].value);
+  const [gasTypeEnumId, setGasTypeEnumId] = useState(gasTypes[0].enumId);
   const [scope1, setScope1] = useState(0);
   const [scope2, setScope2] = useState(0);
 
   const handleCalculate = async () => {
     let payload: any = {};
+    let renewableEnergy = 0;
+    let nonRenewableEnergy = 0;
+    let totalEnergy = 0;
 
     if (source === "electricity") {
       const unitInfo = unitMap[unit as keyof typeof unitMap];
@@ -75,7 +105,12 @@ export function CalculatorCard({ source }: { source: SourceType }) {
         unitId: unitInfo.code,
         unitEnumId: unitInfo.fieldEnumId,
       };
-    } else if (source === "heating") {
+      
+      renewableEnergy = input2;
+      nonRenewableEnergy = input;
+      totalEnergy = renewableEnergy + nonRenewableEnergy;
+    } 
+    else if (source === "heating") {
       const unitInfo = unitMap[unit as keyof typeof unitMap];
       payload = {
         type: "heat",
@@ -86,10 +121,12 @@ export function CalculatorCard({ source }: { source: SourceType }) {
         unitEnumId: unitInfo.fieldEnumId,
         emissionFactor: input2 ? input2.toString() : undefined,
       };
-    } else if (source === "fuel") {
+      
+      totalEnergy = input;
+      nonRenewableEnergy = totalEnergy;
+    } 
+    else if (source === "fuel") {
       const unitInfo = unitMap[unit as keyof typeof unitMap];
-
-      // For (x% biogas) natural gas, use the display name in the api
       const apiFuelType = fuelType === "NaturalGasBiogas" 
         ? "Natural gas (X% biogas)" 
         : fuelType;
@@ -105,6 +142,46 @@ export function CalculatorCard({ source }: { source: SourceType }) {
         fuelTypeEnumId: fuelTypeEnumId,
         biogasProportion: input2 ? input2.toString() : "",
       };
+      
+      totalEnergy = input;
+      nonRenewableEnergy = totalEnergy;
+    }
+    else if (source === "vehicles") {
+      const unitInfo = unit === "L" 
+        ? { code: 'fe_id-268', fieldEnumId: 268 }  
+        : unitMap[unit as keyof typeof unitMap]; 
+      
+      payload = {
+        type: "vehicles",
+        description: "vehicles",
+        amount: input.toString(),
+        unit: unit,
+        unitId: unitInfo.code,
+        unitEnumId: unitInfo.fieldEnumId,
+        vehicleTypeId: vehicleType,
+        vehicleTypeEnumId: vehicleTypeEnumId,
+        biogasProportion: input2 ? input2.toString() : "",
+      };
+      
+      totalEnergy = input;
+      nonRenewableEnergy = totalEnergy;
+    }
+    else if (source === "process") {
+      const unitInfo = unitMap[unit as keyof typeof unitMap];
+      
+      payload = {
+        type: "process",
+        description: "process",
+        amount: input.toString(),
+        unit,
+        unitId: unitInfo.code,
+        unitEnumId: unitInfo.fieldEnumId,
+        processTypeId: gasType,
+        processTypeEnumId: gasTypeEnumId,
+      };
+      
+      totalEnergy = input;
+      nonRenewableEnergy = totalEnergy;
     }
 
     const res = await fetch('/api/calculate', {
@@ -115,30 +192,38 @@ export function CalculatorCard({ source }: { source: SourceType }) {
     const result = await res.json();
 
     const fv = result.data?.fieldValues ?? [];
-    const value5 = fv.find((f: any) => f.id === 5)?.value ?? "0";
-    const value6 = fv.find((f: any) => f.id === 6)?.value ?? "0";
+    let value5 = fv.find((f: any) => f.id === 5)?.value ?? "0";
+    let value6 = fv.find((f: any) => f.id === 6)?.value ?? "0";
+    
     setScope1(Number(value5));
     setScope2(Number(value6));
+    
     updateEmissions(source, {
-      scope1: Number(value5), scope2: Number(value6),
-      renewableEnergy: 0,
-      nonRenewableEnergy: 0,
-      totalEnergy: 0
+      scope1: Number(value5), 
+      scope2: Number(value6),
+      renewableEnergy,
+      nonRenewableEnergy,
+      totalEnergy
     });
   };
 
+  // unit options based on source and selected type
   const availableUnitOptions = source === "fuel"
     ? fuelUnitOptions[fuelType] || []
-    : unitOptionsMap[source];
+    : unitOptionsMap[source] || [];
 
   return (
     <Card className="max-w-md mx-auto">
       <CardContent className="space-y-4 p-6">
-        <h2 className="text-xl font-bold text-green-700 capitalize text-center">{source} Calculator</h2>
+        <h2 className="text-xl font-bold text-green-700 capitalize text-center">
+          {sourceLabels[source]} Calculator
+        </h2>
+        
         <div className="grid grid-cols-2 items-center gap-2">
           <Label htmlFor="desc">Description:</Label>
-          <Input id="desc" value={source} disabled />
+          <Input id="desc" defaultValue={sourceLabels[source]} />
 
+          {/* ELECTRICITY INPUTS */}
           {source === "electricity" && (
             <>
               <Label htmlFor="input">Consumption from grid:</Label>
@@ -149,7 +234,7 @@ export function CalculatorCard({ source }: { source: SourceType }) {
                 min={0}
                 onChange={e => setInput(Number(e.target.value))}
               />
-              <Label htmlFor="input2">Own production:</Label>
+              <Label htmlFor="input2">Own production (Renewable):</Label>
               <Input
                 id="input2"
                 type="number"
@@ -160,6 +245,7 @@ export function CalculatorCard({ source }: { source: SourceType }) {
             </>
           )}
 
+          {/* HEATING INPUTS */}
           {source === "heating" && (
             <>
               <Label htmlFor="input">Amount:</Label>
@@ -181,16 +267,9 @@ export function CalculatorCard({ source }: { source: SourceType }) {
             </>
           )}
 
+          {/* FUEL INPUTS */}
           {source === "fuel" && (
             <>
-              <Label htmlFor="input">Amount:</Label>
-              <Input
-                id="input"
-                type="number"
-                value={input}
-                min={0}
-                onChange={e => setInput(Number(e.target.value))}
-              />
               <Label htmlFor="fuelType">Fuel type:</Label>
               <select
                 id="fuelType"
@@ -199,7 +278,6 @@ export function CalculatorCard({ source }: { source: SourceType }) {
                   const idx = fuelTypes.findIndex(f => f.value === e.target.value);
                   setFuelType(e.target.value);
                   setFuelTypeEnumId(fuelTypes[idx]?.enumId ?? 0);
-                  // reset unit to first valid option for new fuel type
                   const newUnit = fuelUnitOptions[e.target.value]?.[0]?.value || "";
                   setUnit(newUnit);
                 }}
@@ -210,7 +288,15 @@ export function CalculatorCard({ source }: { source: SourceType }) {
                 ))}
               </select>
               
-              {/* only show biogas proportion for Natural gas */}
+              <Label htmlFor="input">Amount:</Label>
+              <Input
+                id="input"
+                type="number"
+                value={input}
+                min={0}
+                onChange={e => setInput(Number(e.target.value))}
+              />
+              
               {fuelType === "NaturalGasBiogas" && (
                 <>
                   <Label htmlFor="input2">Proportion of biogas (%):</Label>
@@ -226,7 +312,68 @@ export function CalculatorCard({ source }: { source: SourceType }) {
               )}
             </>
           )}
+          
+          {/* VEHICLES INPUTS - Distance input removed */}
+          {source === "vehicles" && (
+            <>
+              <Label htmlFor="vehicleType">Vehicle type:</Label>
+              <select
+                id="vehicleType"
+                value={vehicleType}
+                onChange={e => {
+                  const idx = vehicleTypes.findIndex(v => v.value === e.target.value);
+                  setVehicleType(e.target.value);
+                  setVehicleTypeEnumId(vehicleTypes[idx]?.enumId ?? 0);
+                }}
+                className="border rounded px-2 py-1"
+              >
+                {vehicleTypes.map(v => (
+                  <option key={v.value} value={v.value}>{v.label}</option>
+                ))}
+              </select>
+              
+              <Label htmlFor="input">Amount:</Label>
+              <Input
+                id="input"
+                type="number"
+                value={input}
+                min={0}
+                onChange={e => setInput(Number(e.target.value))}
+              />
+            </>
+          )}
 
+          {/* PROCESS INPUTS - Just amount and gas type (no process types) */}
+          {source === "process" && (
+            <>
+              <Label htmlFor="gasType">Greenhouse gas:</Label>
+              <select
+                id="gasType"
+                value={gasType}
+                onChange={e => {
+                  const idx = gasTypes.findIndex(g => g.value === e.target.value);
+                  setGasType(e.target.value);
+                  setGasTypeEnumId(gasTypes[idx]?.enumId ?? 0);
+                }}
+                className="border rounded px-2 py-1"
+              >
+                {gasTypes.map(g => (
+                  <option key={g.value} value={g.value}>{g.label}</option>
+                ))}
+              </select>
+              
+              <Label htmlFor="input">Amount:</Label>
+              <Input
+                id="input"
+                type="number"
+                value={input}
+                min={0}
+                onChange={e => setInput(Number(e.target.value))}
+              />
+            </>
+          )}
+
+          {/* UNIT DROPDOWN FOR ALL */}
           <Label htmlFor="unit">Unit:</Label>
           <select
             id="unit"
@@ -245,10 +392,10 @@ export function CalculatorCard({ source }: { source: SourceType }) {
         </Button>
 
         <div className="grid grid-cols-2 gap-2 pt-4">
-          <Label>Scope 1 CO2e (tons):</Label>
+          <Label>Scope 1 CO₂e (tons):</Label>
           <Input className="text-green-600 font-bold" value={scope1.toFixed(2)} disabled />
 
-          <Label>Scope 2 CO2e (tons):</Label>
+          <Label>Scope 2 CO₂e (tons):</Label>
           <Input className="text-green-600 font-bold" value={scope2.toFixed(2)} disabled />
 
           <Label>Total Emissions (tons):</Label>
